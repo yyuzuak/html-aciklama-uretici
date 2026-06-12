@@ -420,26 +420,45 @@ function clearOverride(){ delete overrides[previewIndex]; refreshPreview(); }
 function applyToAll(){
   const row = rows[previewIndex];
   const title = cellValue(row, $('titleCol').value);
-  let tmpl = overrides[previewIndex] !== undefined ? overrides[previewIndex] : $('previewRender').innerHTML;
+  const src = overrides[previewIndex] !== undefined ? overrides[previewIndex] : $('previewRender').innerHTML;
   // Bu ürünün değerlerini {Sütun} yer tutucularına geri çevir ki her ürün kendi verisini alsın.
-  // Uzun değerden kısaya doğru değiştir; çok kısa sayısal değerleri atla (style içindeki "100" gibi
-  // tesadüfi eşleşmeleri bozmamak için).
-  if (title){
-    tmpl = tmpl.replaceAll(esc(title), '{__BASLIK__}').replaceAll(title, '{__BASLIK__}');
-  }
-  const all = headers.filter(Boolean)
+  // DOM üzerinde yalnızca metin düğümleri ve src/href/alt öznitelikleri taranır;
+  // style ve etiket yapısına dokunulmaz (değerlerin CSS içeriğiyle çakışıp HTML'i bozmaması için).
+  const reps = [];
+  if (title) reps.push([title, '{__BASLIK__}']);
+  headers.filter(Boolean)
     .map(h=>[h, cellValue(row,h)])
     .filter(([,v]) => v !== '')
-    .sort((a,b)=>b[1].length - a[1].length);
-  for (const [h,v] of all){
-    if (v.length >= 4 || (v.length === 3 && !/^\d+$/.test(v))){
-      tmpl = tmpl.replaceAll(esc(v), '{'+h+'}').replaceAll(v, '{'+h+'}');
-    } else {
-      // kısa/sayısal değer: yalnızca etiket sınırları arasında (>125< gibi) değiştir
-      tmpl = tmpl.replaceAll('>'+esc(v)+'<', '>{'+h+'}<').replaceAll('>'+v+'<', '>{'+h+'}<');
+    .sort((a,b)=>b[1].length - a[1].length)
+    .forEach(([h,v])=>reps.push([v, '{'+h+'}']));
+  const tmp = document.createElement('div');
+  tmp.innerHTML = src;
+  const walker = document.createTreeWalker(tmp, NodeFilter.SHOW_TEXT);
+  const texts = [];
+  while (walker.nextNode()) texts.push(walker.currentNode);
+  for (const t of texts){
+    let s = t.nodeValue;
+    for (const [v, tok] of reps){
+      if (!s.includes(v)) continue;
+      // kısa sayısal değerler ("90" gibi) yalnızca hücre içeriğinin tamamıysa değiştirilir,
+      // başka bir sayının parçasını bozmasın
+      if (v.length <= 3 && /^\d+$/.test(v)){
+        if (s.trim() === v) s = s.replace(v, tok);
+      } else {
+        s = s.replaceAll(v, tok);
+      }
     }
+    t.nodeValue = s;
   }
-  globalTemplate = tmpl;
+  tmp.querySelectorAll('[src],[href],[alt]').forEach(el=>{
+    for (const attr of ['src','href','alt']){
+      let a = el.getAttribute(attr);
+      if (!a) continue;
+      for (const [v, tok] of reps) if (a.includes(v)) a = a.replaceAll(v, tok);
+      el.setAttribute(attr, a);
+    }
+  });
+  globalTemplate = tmp.innerHTML;
   delete overrides[previewIndex]; // artık genel şablonun kendisi
   refreshPreview();
 }
