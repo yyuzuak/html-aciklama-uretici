@@ -139,6 +139,7 @@
 
       <div class="divider"></div>
       <label class="check"><input type="checkbox" id="dropEmpty" checked> Değeri boş olan özellik satırını tablodan çıkar</label>
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="fillTitle" checked> Başlığı boş olan satırda (varyant satırı) bir üstteki dolu başlığı kullan</label>
     </div>
   </section>
 
@@ -315,6 +316,7 @@ function insertToken(taId, token){
 
 ['introText','extraHtml','outputCol'].forEach(id=>$(id).addEventListener('input', refreshAll));
 $('dropEmpty').addEventListener('change', refreshAll);
+$('fillTitle').addEventListener('change', refreshAll);
 $('tableStyle').addEventListener('change', refreshAll);
 $('themeColor').addEventListener('input', ()=>{
   $('fmtColor').value = $('themeColor').value; // araç çubuğu renk varsayılanını takip etsin
@@ -339,6 +341,14 @@ function substituteTokens(text, row, title){
   }
   return out;
 }
+function titleFor(rowIdx){
+  let t = cellValue(rows[rowIdx], $('titleCol').value);
+  if (!t && $('fillTitle').checked){
+    // varyant satırı: yukarı doğru ilk dolu başlığı bul
+    for (let i = rowIdx - 1; i >= 0 && !t; i--) t = cellValue(rows[i], $('titleCol').value);
+  }
+  return t;
+}
 function accent(){ return $('themeColor').value || '#1a3a5c'; }
 function specRowHtml(label, val, isOdd){
   const ac = accent();
@@ -354,7 +364,7 @@ function specRowHtml(label, val, isOdd){
 }
 function buildHtml(rowIdx){
   const row = rows[rowIdx];
-  const title = cellValue(row, $('titleCol').value);
+  const title = titleFor(rowIdx);
   if (globalTemplate !== null) return substituteTokens(globalTemplate, row, title);
   const dropEmpty = $('dropEmpty').checked;
   const ac = accent();
@@ -440,7 +450,7 @@ function clearOverride(){
 /* ---------- Düzenlemeyi tüm ürünlere uygulama ---------- */
 function applyToAll(){
   const row = rows[previewIndex];
-  const title = cellValue(row, $('titleCol').value);
+  const title = titleFor(previewIndex);
   const src = overrides[previewIndex] !== undefined ? overrides[previewIndex] : $('previewRender').innerHTML;
   // Bu ürünün değerlerini {Sütun} yer tutucularına geri çevir ki her ürün kendi verisini alsın.
   // DOM üzerinde yalnızca metin düğümleri ve src/href/alt öznitelikleri taranır;
