@@ -158,9 +158,12 @@
       </div>
     </div>
     <div class="row" style="margin-bottom:8px">
-      <span class="hint">Görünümün üzerine tıklayıp doğrudan düzenleyebilirsin — düzenleme yalnızca bu ürüne uygulanır ve Excel çıktısına yansır.</span>
+      <span class="hint">Görünümün üzerine tıklayıp doğrudan düzenleyebilirsin — düzenleme varsayılan olarak yalnızca bu ürüne uygulanır, istersen tüm ürünlere yayabilirsin.</span>
       <span class="badge hidden" id="editedBadge">bu ürün düzenlendi</span>
+      <button class="small hidden" id="applyAllBtn" onclick="applyToAll()">Tüm ürünlere uygula</button>
       <button class="small hidden" id="resetOverride" onclick="clearOverride()">Şablona geri dön</button>
+      <span class="badge hidden" id="tmplBadge">genel şablon düzenlendi</span>
+      <button class="small hidden" id="resetTemplate" onclick="clearTemplate()">Genel düzenlemeyi kaldır</button>
       <span class="meta" id="overrideCount"></span>
     </div>
     <div class="fmtbar" id="fmtBar">
@@ -202,6 +205,7 @@
 let headers = [], rows = [], workbook = null, activeSheet = null, srcFileName = null;
 let previewIndex = 0, previewMode = 'render';
 let overrides = {};          // rowIndex -> html (önizlemede yapılan elle düzenlemeler)
+let globalTemplate = null;   // "tüm ürünlere uygula" ile kaydedilen şablon ({Sütun} yer tutuculu)
 let suppressInput = false;   // programatik içerik yazarken input olayını yoksay
 
 const $ = id => document.getElementById(id);
@@ -232,7 +236,7 @@ function loadSheet(name){
   headers = data[0].map(h=>String(h).trim());
   rows = data.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
   activeSheet = name;
-  previewIndex = 0; overrides = {};
+  previewIndex = 0; overrides = {}; globalTemplate = null;
   $('s1').classList.add('done');
   $('appBody').classList.remove('hidden');
   $('metaInfo').innerHTML = `<b>${rows.length.toLocaleString('tr-TR')}</b> ürün · ${headers.length} sütun`;
@@ -334,6 +338,7 @@ function specRowHtml(label, val, isOdd){
 function buildHtml(rowIdx){
   const row = rows[rowIdx];
   const title = cellValue(row, $('titleCol').value);
+  if (globalTemplate !== null) return substituteTokens(globalTemplate, row, title);
   const dropEmpty = $('dropEmpty').checked;
   const ac = accent();
   let specRowsHtml = '', visibleIdx = 0;
@@ -371,7 +376,10 @@ function refreshPreview(){
   $('previewCode').value = html;
   const edited = overrides[previewIndex] !== undefined;
   $('editedBadge').classList.toggle('hidden', !edited);
+  $('applyAllBtn').classList.toggle('hidden', !edited);
   $('resetOverride').classList.toggle('hidden', !edited);
+  $('tmplBadge').classList.toggle('hidden', globalTemplate === null);
+  $('resetTemplate').classList.toggle('hidden', globalTemplate === null);
   const n = Object.keys(overrides).length;
   $('overrideCount').textContent = n ? `(toplam ${n} ürün elle düzenlendi)` : '';
 }
@@ -384,12 +392,16 @@ function setPreviewMode(m){
   $('previewCode').classList.toggle('hidden', m!=='code');
   $('fmtBar').classList.toggle('hidden', m!=='render');
 }
+function markEdited(){
+  $('editedBadge').classList.remove('hidden');
+  $('applyAllBtn').classList.remove('hidden');
+  $('resetOverride').classList.remove('hidden');
+  $('overrideCount').textContent = `(toplam ${Object.keys(overrides).length} ürün elle düzenlendi)`;
+}
 function saveOverride(){
   overrides[previewIndex] = $('previewRender').innerHTML;
   $('previewCode').value = overrides[previewIndex];
-  $('editedBadge').classList.remove('hidden');
-  $('resetOverride').classList.remove('hidden');
-  $('overrideCount').textContent = `(toplam ${Object.keys(overrides).length} ürün elle düzenlendi)`;
+  markEdited();
 }
 $('previewRender').addEventListener('input', ()=>{
   if (suppressInput) return;
@@ -400,11 +412,38 @@ $('previewCode').addEventListener('input', ()=>{
   suppressInput = true;
   $('previewRender').innerHTML = overrides[previewIndex];
   suppressInput = false;
-  $('editedBadge').classList.remove('hidden');
-  $('resetOverride').classList.remove('hidden');
-  $('overrideCount').textContent = `(toplam ${Object.keys(overrides).length} ürün elle düzenlendi)`;
+  markEdited();
 });
 function clearOverride(){ delete overrides[previewIndex]; refreshPreview(); }
+
+/* ---------- Düzenlemeyi tüm ürünlere uygulama ---------- */
+function applyToAll(){
+  const row = rows[previewIndex];
+  const title = cellValue(row, $('titleCol').value);
+  let tmpl = overrides[previewIndex] !== undefined ? overrides[previewIndex] : $('previewRender').innerHTML;
+  // Bu ürünün değerlerini {Sütun} yer tutucularına geri çevir ki her ürün kendi verisini alsın.
+  // Uzun değerden kısaya doğru değiştir; çok kısa sayısal değerleri atla (style içindeki "100" gibi
+  // tesadüfi eşleşmeleri bozmamak için).
+  if (title){
+    tmpl = tmpl.replaceAll(esc(title), '{__BASLIK__}').replaceAll(title, '{__BASLIK__}');
+  }
+  const all = headers.filter(Boolean)
+    .map(h=>[h, cellValue(row,h)])
+    .filter(([,v]) => v !== '')
+    .sort((a,b)=>b[1].length - a[1].length);
+  for (const [h,v] of all){
+    if (v.length >= 4 || (v.length === 3 && !/^\d+$/.test(v))){
+      tmpl = tmpl.replaceAll(esc(v), '{'+h+'}').replaceAll(v, '{'+h+'}');
+    } else {
+      // kısa/sayısal değer: yalnızca etiket sınırları arasında (>125< gibi) değiştir
+      tmpl = tmpl.replaceAll('>'+esc(v)+'<', '>{'+h+'}<').replaceAll('>'+v+'<', '>{'+h+'}<');
+    }
+  }
+  globalTemplate = tmpl;
+  delete overrides[previewIndex]; // artık genel şablonun kendisi
+  refreshPreview();
+}
+function clearTemplate(){ globalTemplate = null; refreshPreview(); }
 function toggleMobile(){
   const on = $('previewRender').classList.toggle('mobile');
   $('tabMobile').classList.toggle('on', on);
