@@ -106,7 +106,7 @@
 
       <div class="divider"></div>
 
-      <label class="field">Giriş paragrafı <span style="font-weight:400">— çiplere tıklayarak sütun değeri ekle</span></label>
+      <label class="field">Giriş paragrafı <span style="font-weight:400">— çiplere tıklayarak sütun değeri ekle · boş satır = yeni paragraf, Enter = satır sonu</span></label>
       <div class="chips" id="introChips"></div>
       <textarea id="introText" rows="3">{__BASLIK__}, endüstriyel güç aktarım sistemleri için üretilmiş yüksek kaliteli bir üründür. Hassas ölçüleri ve dayanıklı yapısıyla uzun ömürlü kullanım sağlar.</textarea>
 
@@ -118,7 +118,7 @@
 
       <div class="divider"></div>
 
-      <label class="field">Ek HTML (opsiyonel — tablonun altına eklenir, {Sütun Adı} kullanılabilir)</label>
+      <label class="field">Ek HTML (opsiyonel — tablonun altına eklenir, {Sütun Adı} kullanılabilir · düz metin yazarsan paragraflara çevrilir)</label>
       <textarea id="extraHtml" rows="3" placeholder="<p>Tüm ürünlerimiz orijinal ve faturalıdır.</p>"></textarea>
 
       <div class="divider"></div>
@@ -169,11 +169,24 @@
     <div class="fmtbar" id="fmtBar">
       <button class="small" data-cmd="bold" title="Kalın"><b>K</b></button>
       <button class="small" data-cmd="italic" title="İtalik"><i>İ</i></button>
+      <button class="small" data-cmd="underline" title="Altı çizili"><u>A</u></button>
+      <button class="small" data-cmd="strikeThrough" title="Üstü çizili"><s>S</s></button>
+      <span class="sep"></span>
       <button class="small" data-cmd="insertUnorderedList" title="Madde listesi">• Liste</button>
+      <button class="small" data-cmd="insertOrderedList" title="Numaralı liste">1. Liste</button>
       <button class="small" id="fmtH3" title="Ara başlık">H3</button>
+      <button class="small" data-cmd="formatBlock" data-val="<p>" title="Paragraf yap">¶</button>
+      <span class="sep"></span>
+      <button class="small" data-cmd="justifyLeft" title="Sola hizala">Sol</button>
+      <button class="small" data-cmd="justifyCenter" title="Ortala">Orta</button>
+      <button class="small" data-cmd="justifyRight" title="Sağa hizala">Sağ</button>
+      <span class="sep"></span>
       <button class="small" id="fmtLinkBtn" title="Bağlantı ekle">Link</button>
       <label class="colorpick" title="Yazı rengi">A<input type="color" id="fmtColor" value="#1a3a5c"></label>
       <button class="small" data-cmd="removeFormat" title="Biçimlendirmeyi temizle">Tˣ</button>
+      <span class="sep"></span>
+      <button class="small" data-cmd="undo" title="Geri al">↶</button>
+      <button class="small" data-cmd="redo" title="Yinele">↷</button>
       <span class="sep"></span>
       <select id="blockSelect">
         <option value="">+ Blok ekle…</option>
@@ -315,6 +328,10 @@ function cellValue(row, colName){
   const v = row[i];
   return v === undefined || v === null ? '' : String(v).trim();
 }
+function textToParagraphs(t){
+  // boş satır = yeni paragraf, tek satır sonu = <br>
+  return t.split(/\n{2,}/).map(p=>`<p>${p.trim().replaceAll('\n','<br>')}</p>`).join('');
+}
 function substituteTokens(text, row, title){
   let out = text.replaceAll('{__BASLIK__}', title);
   for (const h of headers){
@@ -352,9 +369,10 @@ function buildHtml(rowIdx){
   const extra = substituteTokens($('extraHtml').value, row, title).trim();
   let html = `<div style="font-family:Arial,sans-serif;color:#222;line-height:1.6;">`;
   if (title) html += `<h2 style="font-size:20px;border-bottom:2px solid ${ac};padding-bottom:8px;margin:0 0 12px;">${esc(title)}</h2>`;
-  if (intro) html += `<p>${intro}</p>`;
+  if (intro) html += textToParagraphs(intro);
   if (specRowsHtml) html += `<h3 style="font-size:16px;color:${ac};margin:16px 0 8px;">Teknik Özellikler</h3><table style="width:100%;border-collapse:collapse;">${specRowsHtml}</table>`;
-  if (extra) html += extra;
+  // Ek HTML alanında etiket yoksa düz metin yazılmış demektir: paragraflara çevir
+  if (extra) html += /<[a-z]/i.test(extra) ? extra : textToParagraphs(extra);
   html += `</div>`;
   return html;
 }
@@ -414,7 +432,10 @@ $('previewCode').addEventListener('input', ()=>{
   suppressInput = false;
   markEdited();
 });
-function clearOverride(){ delete overrides[previewIndex]; refreshPreview(); }
+function clearOverride(){
+  if (!confirm('Bu üründeki elle düzenleme silinip şablona dönülecek. Emin misin?')) return;
+  delete overrides[previewIndex]; refreshPreview();
+}
 
 /* ---------- Düzenlemeyi tüm ürünlere uygulama ---------- */
 function applyToAll(){
@@ -462,7 +483,10 @@ function applyToAll(){
   delete overrides[previewIndex]; // artık genel şablonun kendisi
   refreshPreview();
 }
-function clearTemplate(){ globalTemplate = null; refreshPreview(); }
+function clearTemplate(){
+  if (!confirm('"Tüm ürünlere uygula" ile kaydedilen genel şablon silinip üretilen varsayılan tasarıma dönülecek. Emin misin?')) return;
+  globalTemplate = null; refreshPreview();
+}
 function toggleMobile(){
   const on = $('previewRender').classList.toggle('mobile');
   $('tabMobile').classList.toggle('on', on);
@@ -482,14 +506,14 @@ function focusEditor(){
 }
 function applyCmd(cmd, val=null){
   focusEditor();
-  // foreColor'da <font> yerine inline style üret (Ticimax inline style ister)
-  document.execCommand('styleWithCSS', false, cmd === 'foreColor');
+  // renk ve hizalamada <font>/align yerine inline style üret (Ticimax inline style ister)
+  document.execCommand('styleWithCSS', false, cmd === 'foreColor' || cmd.startsWith('justify'));
   document.execCommand(cmd, false, val);
   saveOverride();
 }
 document.querySelectorAll('#fmtBar [data-cmd]').forEach(btn=>{
   btn.addEventListener('mousedown', e=>e.preventDefault()); // seçimi kaybetme
-  btn.addEventListener('click', ()=>applyCmd(btn.dataset.cmd));
+  btn.addEventListener('click', ()=>applyCmd(btn.dataset.cmd, btn.dataset.val || null));
 });
 $('fmtH3').addEventListener('mousedown', e=>e.preventDefault());
 $('fmtH3').addEventListener('click', ()=>{
