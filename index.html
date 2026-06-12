@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticimax HTML Açıklama Üretici</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0c0c0e; --panel:#161618; --panel2:#1d1d21; --border:#2a2a30;
+    --text:#d6d6da; --muted:#8a8a92; --accent:#f5a623; --accent-dim:rgba(245,166,35,.12);
+    --ok:#4ade80; --err:#f87171; --code:#a7e8c3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 16px 80px}
+  header{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:28px;flex-wrap:wrap;gap:8px}
+  .eyebrow{font:11px ui-monospace,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+  h1{margin:0;font-size:22px;color:#fafafa}
+  .meta{font:13px ui-monospace,monospace;color:var(--muted)}
+  .meta b{color:var(--accent);font-weight:600}
+  section{margin-bottom:28px}
+  .step{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .stepnum{font:11px ui-monospace,monospace;background:var(--panel2);color:var(--muted);border-radius:4px;padding:2px 7px}
+  .stepnum.done{background:var(--accent);color:#111}
+  .step h2{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:#cfcfd6}
+  .step .hint{font-size:12px;color:var(--muted)}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+  button{cursor:pointer;font:inherit;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:7px 14px;transition:.15s}
+  button:hover{border-color:#4a4a52}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#111;font-weight:600;padding:10px 20px}
+  button.primary:hover{filter:brightness(1.08)}
+  button.primary:disabled{opacity:.5;cursor:default}
+  button.small{padding:3px 9px;font-size:12px}
+  select,input[type=text],textarea{font:inherit;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:rgba(245,166,35,.5)}
+  textarea{width:100%;resize:vertical;font:12px/1.7 ui-monospace,monospace;color:var(--code);background:#0a0a0c}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  label.field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .chip{font:11px ui-monospace,monospace;padding:3px 9px;border-radius:5px;border:1px solid var(--border);background:var(--panel2);color:var(--text);cursor:pointer}
+  .chip:hover{border-color:var(--accent)}
+  table.specmap{width:100%;border-collapse:collapse;margin-top:6px}
+  table.specmap td{padding:4px 6px 4px 0;vertical-align:middle}
+  table.specmap input[type=text]{width:100%}
+  table.specmap select{width:100%}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer}
+  .check input{accent-color:var(--accent)}
+  .previewbar{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .toggle{font-size:12px;padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted)}
+  .toggle.on{border-color:rgba(245,166,35,.6);color:#ffd58a;background:var(--accent-dim)}
+  #previewRender{background:#fff;color:#222;border-radius:10px;border:1px solid var(--border);padding:24px;min-height:160px;overflow:auto}
+  #previewRender:focus{outline:2px solid var(--accent)}
+  #previewCode{background:#0a0a0c;border:1px solid var(--border);border-radius:10px;padding:16px;min-height:160px;overflow:auto;font:12px/1.7 ui-monospace,monospace;color:var(--code);white-space:pre-wrap;margin:0}
+  .badge{font:11px ui-monospace,monospace;padding:2px 8px;border-radius:10px;background:var(--accent-dim);color:#ffd58a;border:1px solid rgba(245,166,35,.4)}
+  .status{font:13px ui-monospace,monospace}
+  .status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.info{color:var(--muted)}
+  .divider{height:1px;background:var(--border);margin:14px 0}
+  .hidden{display:none!important}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Ticimax · Toplu İçerik</div>
+      <h1>HTML Açıklama Üretici</h1>
+    </div>
+    <div class="meta" id="metaInfo"></div>
+  </header>
+
+  <!-- 1: Dosya -->
+  <section>
+    <div class="step"><span class="stepnum" id="s1">1</span><h2>Excel Dosyası</h2></div>
+    <div class="panel row">
+      <button onclick="document.getElementById('fileInput').click()" id="fileBtn">Dosya seç (.xlsx / .csv)</button>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden">
+      <span class="meta" id="fileName"></span>
+      <select id="sheetSelect" class="hidden"></select>
+    </div>
+  </section>
+
+  <div id="appBody" class="hidden">
+
+  <!-- 2: Eşleştirme -->
+  <section>
+    <div class="step"><span class="stepnum" id="s2">2</span><h2>Sütun Eşleştirme</h2><span class="hint">Hangi bilgi hangi sütundan gelecek</span></div>
+    <div class="panel">
+      <div class="grid2">
+        <label class="field">Ürün başlığı sütunu
+          <select id="titleCol"></select>
+        </label>
+        <label class="field">Çıktı sütununun adı (Ticimax şablonundaki başlıkla aynı olsun)
+          <input type="text" id="outputCol" value="Detay Açıklama (HTML)">
+        </label>
+      </div>
+
+      <div class="divider"></div>
+
+      <label class="field">Giriş paragrafı <span style="font-weight:400">— çiplere tıklayarak sütun değeri ekle</span></label>
+      <div class="chips" id="introChips"></div>
+      <textarea id="introText" rows="3">{__BASLIK__}, endüstriyel güç aktarım sistemleri için üretilmiş yüksek kaliteli bir üründür. Hassas ölçüleri ve dayanıklı yapısıyla uzun ömürlü kullanım sağlar.</textarea>
+
+      <div class="divider"></div>
+
+      <label class="field">Teknik özellikler tablosu</label>
+      <table class="specmap"><tbody id="specRows"></tbody></table>
+      <div style="margin-top:8px"><button class="small" onclick="addSpecRow()">+ Özellik satırı ekle</button></div>
+
+      <div class="divider"></div>
+
+      <label class="field">Ek HTML (opsiyonel — tablonun altına eklenir, {Sütun Adı} kullanılabilir)</label>
+      <textarea id="extraHtml" rows="3" placeholder="<p>Tüm ürünlerimiz orijinal ve faturalıdır.</p>"></textarea>
+
+      <div class="divider"></div>
+      <label class="check"><input type="checkbox" id="dropEmpty" checked> Değeri boş olan özellik satırını tablodan çıkar</label>
+    </div>
+  </section>
+
+  <!-- 3: Önizleme -->
+  <section>
+    <div class="step">
+      <span class="stepnum">3</span><h2>Önizleme</h2>
+      <div class="previewbar">
+        <button class="small" onclick="movePreview(-1)">←</button>
+        <span class="meta"><span id="pIdx">1</span> / <span id="pTotal"></span></span>
+        <button class="small" onclick="movePreview(1)">→</button>
+        <span style="width:1px;height:18px;background:var(--border)"></span>
+        <button class="toggle on" id="tabRender" onclick="setPreviewMode('render')">Görünüm</button>
+        <button class="toggle" id="tabCode" onclick="setPreviewMode('code')">Kod</button>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <span class="hint">Görünümün üzerine tıklayıp doğrudan düzenleyebilirsin — düzenleme yalnızca bu ürüne uygulanır ve Excel çıktısına yansır.</span>
+      <span class="badge hidden" id="editedBadge">bu ürün düzenlendi</span>
+      <button class="small hidden" id="resetOverride" onclick="clearOverride()">Şablona geri dön</button>
+      <span class="meta" id="overrideCount"></span>
+    </div>
+    <div id="previewRender" contenteditable="true" spellcheck="false"></div>
+    <pre id="previewCode" class="hidden"></pre>
+  </section>
+
+  <!-- 4: Üret -->
+  <section>
+    <div class="step"><span class="stepnum">4</span><h2>Üret ve İndir</h2></div>
+    <div class="panel row">
+      <button class="primary" id="genBtn" onclick="generate()">Tüm ürünlere uygula ve Excel indir</button>
+      <span class="status" id="status"></span>
+    </div>
+  </section>
+
+  </div>
+</div>
+
+<script>
+let headers = [], rows = [], workbook = null, activeSheet = null, srcFileName = null;
+let previewIndex = 0, previewMode = 'render';
+let overrides = {};          // rowIndex -> html (önizlemede yapılan elle düzenlemeler)
+let suppressInput = false;   // programatik içerik yazarken input olayını yoksay
+
+const $ = id => document.getElementById(id);
+
+/* ---------- Dosya okuma ---------- */
+$('fileInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setStatus('info','Dosya okunuyor…');
+  try {
+    const buf = await file.arrayBuffer();
+    workbook = XLSX.read(buf, {type:'array'});
+    srcFileName = file.name;
+    $('fileName').textContent = file.name;
+    $('fileBtn').textContent = 'Başka dosya seç';
+    const sel = $('sheetSelect');
+    sel.innerHTML = workbook.SheetNames.map(n=>`<option>${esc(n)}</option>`).join('');
+    sel.classList.toggle('hidden', workbook.SheetNames.length < 2);
+    sel.onchange = () => loadSheet(sel.value);
+    loadSheet(workbook.SheetNames[0]);
+  } catch(err) { setStatus('err','Dosya okunamadı: '+err.message); }
+  e.target.value = '';
+});
+
+function loadSheet(name){
+  const data = XLSX.utils.sheet_to_json(workbook.Sheets[name], {header:1, defval:'', raw:false});
+  if (!data.length){ setStatus('err','Bu sayfada veri yok.'); return; }
+  headers = data[0].map(h=>String(h).trim());
+  rows = data.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
+  activeSheet = name;
+  previewIndex = 0; overrides = {};
+  $('s1').classList.add('done');
+  $('appBody').classList.remove('hidden');
+  $('metaInfo').innerHTML = `<b>${rows.length.toLocaleString('tr-TR')}</b> ürün · ${headers.length} sütun`;
+  $('pTotal').textContent = rows.length.toLocaleString('tr-TR');
+  buildMappingUI();
+  setStatus('','');
+  refreshPreview();
+}
+
+/* ---------- Eşleştirme arayüzü ---------- */
+function colOptions(selected){
+  return '<option value="">— seç —</option>' +
+    headers.filter(Boolean).map(h=>`<option ${h===selected?'selected':''}>${esc(h)}</option>`).join('');
+}
+
+function buildMappingUI(){
+  // başlık sütunu: "ad/isim/başlık" geçen ilk sütunu tahmin et
+  const guess = headers.find(h=>/ad|isim|başlık|name|title/i.test(h)) || headers[0];
+  $('titleCol').innerHTML = colOptions(guess);
+  $('titleCol').onchange = refreshAll;
+  // giriş paragrafı çipleri
+  $('introChips').innerHTML = headers.filter(Boolean)
+    .map(h=>`<span class="chip" onclick="insertToken('introText','{${esc(h)}}')">{${esc(h)}}</span>`).join('');
+  // teknik özellik satırları: sayısal/teknik görünen sütunlardan birkaç tahmin
+  $('specRows').innerHTML = '';
+  const techGuesses = headers.filter(h=>h && /diş|geniş|uzunluk|profil|adım|boy|ölçü|tip|model|kod/i.test(h)).slice(0,4);
+  if (techGuesses.length) techGuesses.forEach(h=>addSpecRow(h, h));
+  else { addSpecRow(); addSpecRow(); }
+}
+
+function addSpecRow(label='', col=''){
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="width:38%"><input type="text" placeholder="Etiket (ör. Diş Sayısı)" value="${esc(label)}" oninput="refreshAll()"></td>
+    <td style="width:38%"><select onchange="refreshAll()">${colOptions(col)}</select></td>
+    <td style="width:24%;white-space:nowrap">
+      <button class="small" onclick="moveSpec(this,-1)">↑</button>
+      <button class="small" onclick="moveSpec(this,1)">↓</button>
+      <button class="small" onclick="this.closest('tr').remove();refreshAll()">✕</button>
+    </td>`;
+  $('specRows').appendChild(tr);
+  refreshAll();
+}
+function moveSpec(btn, dir){
+  const tr = btn.closest('tr'), tbody = tr.parentNode;
+  const sib = dir<0 ? tr.previousElementSibling : tr.nextElementSibling;
+  if (sib) dir<0 ? tbody.insertBefore(tr,sib) : tbody.insertBefore(sib,tr);
+  refreshAll();
+}
+function getSpecs(){
+  return [...$('specRows').querySelectorAll('tr')].map(tr=>({
+    label: tr.querySelector('input').value.trim(),
+    col: tr.querySelector('select').value
+  })).filter(s=>s.label && s.col);
+}
+
+function insertToken(taId, token){
+  const ta = $(taId), s = ta.selectionStart ?? ta.value.length, e2 = ta.selectionEnd ?? ta.value.length;
+  ta.value = ta.value.slice(0,s) + token + ta.value.slice(e2);
+  ta.focus(); ta.selectionStart = ta.selectionEnd = s + token.length;
+  refreshAll();
+}
+
+['introText','extraHtml','outputCol'].forEach(id=>$(id).addEventListener('input', refreshAll));
+$('dropEmpty').addEventListener('change', refreshAll);
+
+/* ---------- HTML üretimi ---------- */
+function cellValue(row, colName){
+  const i = headers.indexOf(colName);
+  if (i === -1) return '';
+  const v = row[i];
+  return v === undefined || v === null ? '' : String(v).trim();
+}
+function substituteTokens(text, row, title){
+  let out = text.replaceAll('{__BASLIK__}', title);
+  for (const h of headers){
+    if (h && out.includes('{'+h+'}')) out = out.replaceAll('{'+h+'}', cellValue(row,h));
+  }
+  return out;
+}
+function buildHtml(rowIdx){
+  const row = rows[rowIdx];
+  const title = cellValue(row, $('titleCol').value);
+  const dropEmpty = $('dropEmpty').checked;
+  let specRowsHtml = '';
+  getSpecs().forEach((s, i) => {
+    const val = cellValue(row, s.col);
+    if (dropEmpty && val === '') return;
+    const bg = specRowsHtml.split('<tr').length % 2 === 1 ? ' style="background:#f4f6f8;"' : '';
+    specRowsHtml += `<tr${bg}><td style="padding:8px 12px;border:1px solid #ddd;width:40%;"><strong>${esc(s.label)}</strong></td><td style="padding:8px 12px;border:1px solid #ddd;">${esc(val)}</td></tr>`;
+  });
+  const intro = substituteTokens($('introText').value, row, title).trim();
+  const extra = substituteTokens($('extraHtml').value, row, title).trim();
+  let html = `<div style="font-family:Arial,sans-serif;color:#222;line-height:1.6;">`;
+  if (title) html += `<h2 style="font-size:20px;border-bottom:2px solid #1a3a5c;padding-bottom:8px;margin:0 0 12px;">${esc(title)}</h2>`;
+  if (intro) html += `<p>${intro}</p>`;
+  if (specRowsHtml) html += `<h3 style="font-size:16px;color:#1a3a5c;margin:16px 0 8px;">Teknik Özellikler</h3><table style="width:100%;border-collapse:collapse;">${specRowsHtml}</table>`;
+  if (extra) html += extra;
+  html += `</div>`;
+  return html;
+}
+function htmlFor(rowIdx){ return overrides[rowIdx] !== undefined ? overrides[rowIdx] : buildHtml(rowIdx); }
+
+/* ---------- Önizleme ---------- */
+function refreshAll(){ updateStepBadges(); refreshPreview(); }
+function updateStepBadges(){
+  $('s2').classList.toggle('done', !!$('titleCol').value || getSpecs().length>0);
+}
+function refreshPreview(){
+  if (!rows.length) return;
+  previewIndex = Math.max(0, Math.min(previewIndex, rows.length-1));
+  $('pIdx').textContent = (previewIndex+1).toLocaleString('tr-TR');
+  const html = htmlFor(previewIndex);
+  suppressInput = true;
+  $('previewRender').innerHTML = html;
+  suppressInput = false;
+  $('previewCode').textContent = html;
+  const edited = overrides[previewIndex] !== undefined;
+  $('editedBadge').classList.toggle('hidden', !edited);
+  $('resetOverride').classList.toggle('hidden', !edited);
+  const n = Object.keys(overrides).length;
+  $('overrideCount').textContent = n ? `(toplam ${n} ürün elle düzenlendi)` : '';
+}
+function movePreview(dir){ previewIndex += dir; refreshPreview(); }
+function setPreviewMode(m){
+  previewMode = m;
+  $('tabRender').classList.toggle('on', m==='render');
+  $('tabCode').classList.toggle('on', m==='code');
+  $('previewRender').classList.toggle('hidden', m!=='render');
+  $('previewCode').classList.toggle('hidden', m!=='code');
+}
+$('previewRender').addEventListener('input', ()=>{
+  if (suppressInput) return;
+  overrides[previewIndex] = $('previewRender').innerHTML;
+  $('previewCode').textContent = overrides[previewIndex];
+  $('editedBadge').classList.remove('hidden');
+  $('resetOverride').classList.remove('hidden');
+  $('overrideCount').textContent = `(toplam ${Object.keys(overrides).length} ürün elle düzenlendi)`;
+});
+function clearOverride(){ delete overrides[previewIndex]; refreshPreview(); }
+
+/* ---------- Üretim ve indirme ---------- */
+function generate(){
+  if (!rows.length) return;
+  $('genBtn').disabled = true;
+  setStatus('info', rows.length.toLocaleString('tr-TR') + ' ürün işleniyor…');
+  setTimeout(()=>{
+    try {
+      const colName = $('outputCol').value.trim() || 'HTML';
+      const existing = headers.indexOf(colName);
+      const newHeaders = existing === -1 ? [...headers, colName] : headers;
+      const target = existing === -1 ? headers.length : existing;
+      const out = rows.map((r,i)=>{
+        const copy = [...r];
+        while (copy.length < newHeaders.length) copy.push('');
+        copy[target] = minifyHtml(htmlFor(i));
+        return copy;
+      });
+      // Excel hücre sınırı: 32767 karakter. Aşanları kırp ve raporla.
+      const LIMIT = 32767;
+      const tooLong = [];
+      for (let ri = 0; ri < out.length; ri++){
+        for (let ci = 0; ci < out[ri].length; ci++){
+          const v = out[ri][ci];
+          if (typeof v === 'string' && v.length > LIMIT){
+            tooLong.push({ excelRow: ri + 2, col: newHeaders[ci] || ('Sütun ' + (ci+1)), len: v.length });
+            out[ri][ci] = v.slice(0, LIMIT - 1);
+          }
+        }
+      }
+      const ws = XLSX.utils.aoa_to_sheet([newHeaders, ...out]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, activeSheet || 'Urunler');
+      const base = (srcFileName || 'urunler.xlsx').replace(/\.(xlsx|xls|csv)$/i,'');
+      XLSX.writeFile(wb, base + '_HTML.xlsx');
+      if (tooLong.length){
+        const sample = tooLong.slice(0,5).map(t=>`satır ${t.excelRow} (${t.col}, ${t.len.toLocaleString('tr-TR')} kr.)`).join(', ');
+        setStatus('err', `Dosya indirildi ancak ${tooLong.length} hücre Excel'in 32.767 karakter sınırını aştığı için kırpıldı: ${sample}${tooLong.length>5?' …':''}`);
+      } else {
+        setStatus('ok', rows.length.toLocaleString('tr-TR') + ' ürüne HTML uygulandı, dosya indirildi.');
+      }
+    } catch(err){ setStatus('err','Hata: '+err.message); }
+    $('genBtn').disabled = false;
+  }, 50);
+}
+
+function setStatus(type,msg){ const s=$('status'); s.className='status '+type; s.textContent=msg; }
+function minifyHtml(s){ return String(s).replace(/\s*\n\s*/g,' ').replace(/>\s+</g,'><').trim(); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
