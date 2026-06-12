@@ -250,7 +250,7 @@ function loadSheet(name){
   headers = data[0].map(h=>String(h).trim());
   rows = data.slice(1).filter(r=>r.some(c=>String(c).trim()!==''));
   activeSheet = name;
-  previewIndex = 0; overrides = {}; globalTemplate = null;
+  previewIndex = 0; overrides = {}; globalTemplate = null; lastSpecSig = null;
   $('s1').classList.add('done');
   $('appBody').classList.remove('hidden');
   $('metaInfo').innerHTML = `<b>${rows.length.toLocaleString('tr-TR')}</b> ürün · ${headers.length} sütun`;
@@ -362,25 +362,30 @@ function specRowHtml(label, val, isOdd){
       return `<tr${bg}><td style="padding:8px 12px;border:1px solid #ddd;width:40%;"><strong>${esc(label)}</strong></td><td style="padding:8px 12px;border:1px solid #ddd;">${esc(val)}</td></tr>`;
   }
 }
+function specTableHtml(rowIdx){
+  // rowIdx null ise genel şablon için {Sütun} yer tutuculu tablo üretilir
+  const ac = accent(), dropEmpty = $('dropEmpty').checked;
+  let rowsHtml = '', vis = 0;
+  getSpecs().forEach(s => {
+    const val = rowIdx === null ? '{'+s.col+'}' : cellValue(rows[rowIdx], s.col);
+    if (rowIdx !== null && dropEmpty && val === '') return;
+    rowsHtml += specRowHtml(s.label, val, vis % 2 === 0);
+    vis++;
+  });
+  if (!rowsHtml) return '';
+  return `<h3 style="font-size:16px;color:${ac};margin:16px 0 8px;">Teknik Özellikler</h3><table style="width:100%;border-collapse:collapse;">${rowsHtml}</table>`;
+}
 function buildHtml(rowIdx){
   const row = rows[rowIdx];
   const title = titleFor(rowIdx);
   if (globalTemplate !== null) return substituteTokens(globalTemplate, row, title);
-  const dropEmpty = $('dropEmpty').checked;
   const ac = accent();
-  let specRowsHtml = '', visibleIdx = 0;
-  getSpecs().forEach(s => {
-    const val = cellValue(row, s.col);
-    if (dropEmpty && val === '') return;
-    specRowsHtml += specRowHtml(s.label, val, visibleIdx % 2 === 0);
-    visibleIdx++;
-  });
   const intro = substituteTokens($('introText').value, row, title).trim();
   const extra = substituteTokens($('extraHtml').value, row, title).trim();
   let html = `<div style="font-family:Arial,sans-serif;color:#222;line-height:1.6;">`;
   if (title) html += `<h2 style="font-size:20px;border-bottom:2px solid ${ac};padding-bottom:8px;margin:0 0 12px;">${esc(title)}</h2>`;
   if (intro) html += textToParagraphs(intro);
-  if (specRowsHtml) html += `<h3 style="font-size:16px;color:${ac};margin:16px 0 8px;">Teknik Özellikler</h3><table style="width:100%;border-collapse:collapse;">${specRowsHtml}</table>`;
+  html += specTableHtml(rowIdx);
   // Ek HTML alanında etiket yoksa düz metin yazılmış demektir: paragraflara çevir
   if (extra) html += /<[a-z]/i.test(extra) ? extra : textToParagraphs(extra);
   html += `</div>`;
@@ -389,7 +394,41 @@ function buildHtml(rowIdx){
 function htmlFor(rowIdx){ return overrides[rowIdx] !== undefined ? overrides[rowIdx] : buildHtml(rowIdx); }
 
 /* ---------- Önizleme ---------- */
-function refreshAll(){ updateStepBadges(); refreshPreview(); }
+// Özellik tablosu ayarları değiştiğinde elle düzenlenmiş ürünlerin ve genel şablonun
+// içindeki tabloyu yeniler; metin düzenlemelerine dokunmaz.
+let lastSpecSig = null;
+function specSig(){
+  return JSON.stringify([getSpecs(), $('tableStyle').value, accent(), $('dropEmpty').checked]);
+}
+function replaceSpecIn(html, block){
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const table = tmp.querySelector('table');
+  if (table){
+    const prev = table.previousElementSibling;
+    const anchor = document.createElement('span');
+    table.parentNode.insertBefore(anchor, table);
+    table.remove();
+    if (prev && prev.tagName === 'H3') prev.remove();
+    anchor.outerHTML = block;
+  } else if (block){
+    (tmp.firstElementChild || tmp).insertAdjacentHTML('beforeend', block);
+  }
+  return tmp.innerHTML;
+}
+function syncSpecTables(){
+  for (const k of Object.keys(overrides)){
+    overrides[k] = replaceSpecIn(overrides[k], specTableHtml(+k));
+  }
+  if (globalTemplate !== null) globalTemplate = replaceSpecIn(globalTemplate, specTableHtml(null));
+}
+function refreshAll(){
+  updateStepBadges();
+  const sig = specSig();
+  if (lastSpecSig !== null && sig !== lastSpecSig) syncSpecTables();
+  lastSpecSig = sig;
+  refreshPreview();
+}
 function updateStepBadges(){
   $('s2').classList.toggle('done', !!$('titleCol').value || getSpecs().length>0);
 }
